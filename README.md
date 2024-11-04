@@ -1,21 +1,9 @@
 
 <img src="https://osmbuildings.org/logo.svg" width="100" height="88">
 
-OSM Buildings is a JavaScript library for showing building geometry on interactive maps.
+[OSM Buildings](https://osmbuildings.org/) is a JavaScript library for showing building geometry on interactive maps. 
 
-Example: https://osmbuildings.org/
-
-**The standalone WebGL version odf OSM Buildings is located here: https://github.com/OSMBuildings/OSMBuildings**
-
-There is also documentation of OSM Buildings Server side:
-https://github.com/kekscom/osmbuildings/blob/master/docs/server.md
-
-**Example** https://osmbuildings.org/
-
-It's safe use the [master branch](https://github.com/kekscom/osmbuildings/tree/master/dist/) for production.
-
-For further information visit https://osmbuildings.org, follow [@osmbuildings](https://twitter.com/osmbuildings/) on Twitter or report issues [here on Github](https://github.com/kekscom/osmbuildings/issues/).
-
+This is the OSMBuildings-classics. One of the most favorable feature of the classic version is its integration with Leaflet and OpenLayers. Sadly, this version has multiple versions at GitHub, [npmjs](https://www.npmjs.com/package/osmbuildings-classic), and [jsdelivr](https://www.jsdelivr.com/package/npm/osmbuildings-classic?path=dist). The data (Building footprint GeoJSON tiles with height attribute) access method has also changed because onegeo hosts the data now. It seesm some of these versions do not work well now.
 
 ## Documentation
 
@@ -25,9 +13,11 @@ Link Leaflet and OSM Buildings files in your HTML head section.
 
 ~~~ html
 <head>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"></script>
-  <script src="OSMBuildings-Leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/osmbuildings-classic@3.0.0/dist/OSMBuildings.css" />
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/osmbuildings-classic@3.0.0/dist/OSMBuildings-Leaflet.js"></script>
 </head>
 ~~~
 
@@ -43,7 +33,11 @@ new L.TileLayer('https://{s}.tiles.mapbox.com/v3/<YOUR KEY HERE>/{z}/{x}/{y}.png
 Add the buildings layer.
 
 ~~~ javascript
-new OSMBuildings(map).load();
+new OSMBuildings(map).load('https://{s}-data.onegeo.co/maps/tiles/{z}/{x}/{y}.json?token={Your Key at OneGeo}');
+osmb.style({"wallColor": "rgb(158,158,158)",
+            "roofColor": "rgb(218,218,218)",
+            "shadows": true})
+osmb.date(new Date(2024, 11, 5, 10, 0)););
 ~~~
 
 As a popular alternative, you could pass a <a href="http://www.geojson.org/geojson-spec.html">GeoJSON</a> FeatureCollection object.<br>
@@ -78,47 +72,6 @@ var geoJSON = {
 
 new OSMBuildings(map).set(geoJSON);
 ~~~
-
-
-### Integration with OpenLayers
-
-* NEW: for Integration with OpenLayers 5 see /tests/openlayers-5.3.0 *
-
-Link OpenLayers and OSM Buildings files in your HTML head section.
-
-~~~ html
-<head>
-  <script src="http://www.openlayers.org/api/OpenLayers.js"></script>
-  <script src="OSMBuildings-OpenLayers.js"></script>
-</head>
-~~~
-
-Initialize the map engine and add a map tile layer.<br>
-Position is set to Berlin at zoom level 17.
-
-~~~ javascript
-var map = new OpenLayers.Map('map');
-map.addControl(new OpenLayers.Control.LayerSwitcher());
-
-var osm = new OpenLayers.Layer.OSM();
-map.addLayer(osm);
-
-map.setCenter(
-  new OpenLayers.LonLat(13.37570, 52.52020)
-    .transform(
-      new OpenLayers.Projection('EPSG:4326'),
-      map.getProjectionObject()
-    ),
-  17
-);
-~~~
-
-Add the buildings layer.
-
-~~~ javascript
-new OSMBuildings(map).load();
-~~~
-
 
 ## API
 
