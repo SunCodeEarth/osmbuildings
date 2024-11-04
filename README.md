@@ -35,7 +35,8 @@ new L.TileLayer('https://{s}.tiles.mapbox.com/v3/<YOUR KEY HERE>/{z}/{x}/{y}.png
 Add the buildings layer.
 
 ~~~ javascript
-new OSMBuildings(map).load('https://{s}-data.onegeo.co/maps/tiles/{z}/{x}/{y}.json?token={Your Key at OneGeo}');
+var osmb = new OSMBuildings(map)
+    .load('https://{s}-data.onegeo.co/maps/tiles/{z}/{x}/{y}.json?token={Your Key at OneGeo}');
 osmb.style({"wallColor": "rgb(158,158,158)",
             "roofColor": "rgb(218,218,218)",
             "shadows": true})
