@@ -3,7 +3,9 @@
 
 [OSM Buildings](https://osmbuildings.org/) is a JavaScript library for showing building geometry on interactive maps. 
 
-This is the OSMBuildings-classics. One of the most favorable feature of the classic version is its integration with Leaflet and OpenLayers. Sadly, this version has multiple versions at GitHub, [npmjs](https://www.npmjs.com/package/osmbuildings-classic), and [jsdelivr](https://www.jsdelivr.com/package/npm/osmbuildings-classic?path=dist). The data (Building footprint GeoJSON tiles with height attribute) access method has also changed because onegeo hosts the data now. It seesm some of these versions do not work well now.
+This is the OSMBuildings-classics. One of the most favorable feature of the classic version is its integration with Leaflet and OpenLayers. Sadly, this version has multiple versions at GitHub, [npmjs](https://www.npmjs.com/package/osmbuildings-classic), and [jsdelivr](https://www.jsdelivr.com/package/npm/osmbuildings-classic?path=dist). The data (Building footprint GeoJSON tiles with height attribute) access method has also changed because onegeo hosts the data now. It seems some of these versions do not work well now.
+
+This fork is to make necessary changes so that it works with the OneGeo data source.
 
 ## Documentation
 
