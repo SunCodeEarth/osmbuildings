@@ -991,7 +991,7 @@ class Data {
 
   static resetItems () {
     this.items = [];
-    this.cache = {};
+    this.loadedItems = {};
     Picking.reset();
   }
 
@@ -1001,11 +1001,11 @@ class Data {
     for (let i = 0, il = geojson.length; i < il; i++) {
       item = geojson[i];
       id = item.id || [item.footprint[0], item.footprint[1], item.height, item.minHeight].join(',');
-      if (!this.cache[id]) {
+      if (!this.loadedItems[id]) {
         if ((scaledItem = this.scaleItem(item))) {
           scaledItem.scale = allAreNew ? 0 : 1;
           this.items.push(scaledItem);
-          this.cache[id] = 1;
+          this.loadedItems[id] = 1;
         }
       }
     }
@@ -1120,6 +1120,7 @@ class Data {
   }
 
   static set (data) {
+    this.isStatic = true;
     this.resetItems();
     this._staticData = data;
     this.addRenderItems(this._staticData, true);
@@ -1137,31 +1138,33 @@ class Data {
       return;
     }
 
-    if (this._staticData) {
+    if (this.isStatic && this._staticData) {
       this.addRenderItems(this._staticData);
+      return;
     }
 
-    if (this.src) {
-      let
-        tileZoom = 16,
-        tileSize = 256,
-        zoomedTileSize = ZOOM > tileZoom ? tileSize << (ZOOM - tileZoom) : tileSize >> (tileZoom - ZOOM),
-        minX = ORIGIN_X / zoomedTileSize << 0,
-        minY = ORIGIN_Y / zoomedTileSize << 0,
-        maxX = ceil((ORIGIN_X + WIDTH) / zoomedTileSize),
-        maxY = ceil((ORIGIN_Y + HEIGHT) / zoomedTileSize),
-        x, y;
+    if (!this.src) {
+      return;
+    }
 
-      let scope = this;
+    let
+      tileZoom = 16,
+      tileSize = 256,
+      zoomedTileSize = ZOOM > tileZoom ? tileSize <<(ZOOM-tileZoom) : tileSize >>(tileZoom-ZOOM),
+      minX = ORIGIN_X/zoomedTileSize <<0,
+      minY = ORIGIN_Y/zoomedTileSize <<0,
+      maxX = ceil((ORIGIN_X+WIDTH) /zoomedTileSize),
+      maxY = ceil((ORIGIN_Y+HEIGHT)/zoomedTileSize),
+      x, y;
 
-      function callback (json) {
-        scope.addRenderItems(json);
-      }
+    let scope = this;
+    function callback(json) {
+      scope.addRenderItems(json);
+    }
 
-      for (y = minY; y <= maxY; y++) {
-        for (x = minX; x <= maxX; x++) {
-          this.loadTile(x, y, tileZoom, callback);
-        }
+    for (y = minY; y <= maxY; y++) {
+      for (x = minX; x <= maxX; x++) {
+        this.loadTile(x, y, tileZoom, callback);
       }
     }
   }
@@ -1173,7 +1176,7 @@ class Data {
   }
 }
 
-Data.cache = {}; // maintain a list of cached items in order to avoid duplicates on tile borders
+Data.loadedItems = {}; // maintain a list of cached items in order to avoid duplicates on tile borders
 Data.items = [];
 
 class Extrusion {
@@ -2238,15 +2241,13 @@ function onZoomEnd (e) {
   Data.update(); // => fadeIn()
 }
 
-// based on a pull request from Jérémy Judéaux (https://github.com/Volune)
 
-class OSMBuildings extends ol.layer.Layer {
+class OSMBuildings extends L.Layer {
 
   constructor (map) {
-    super(OSMBuildings.name, {projection: 'EPSG:900913'});
+    super(map);
 
-    this.offset = {x: 0, y: 0}; // cumulative cam offset during moveBy()
-
+    this.offset = {x: 0, y: 0};
     Layers.init();
     if (map) {
       map.addLayer(this);
@@ -2254,94 +2255,215 @@ class OSMBuildings extends ol.layer.Layer {
   }
 
   addTo (map) {
-    this.setMap(map);
+    map.addLayer(this);
     return this;
   }
 
-  setOrigin () {
-    let map = this.map,
-      origin = map.getLonLatFromPixel(new OpenLayers.Pixel(0, 0)),
-      res = map.resolution,
-      ext = this.maxExtent,
-      x = (origin.lon - ext.left) / res << 0,
-      y = (ext.top - origin.lat) / res << 0;
-    setOrigin({x: x, y: y});
-  }
+  onAdd (map) {
+    this.map = map;
+    Layers.appendTo(map._panes.overlayPane);
 
-  setMap (map) {
-    if (!this.map) {
-      super.setMap.call(this, map);
+    let
+      off = this.getOffset(),
+      po = map.getPixelOrigin();
+    setSize({width: map._size.x, height: map._size.y});
+    setOrigin({x: po.x - off.x, y: po.y - off.y});
+    setZoom(map._zoom);
+
+    Layers.setPosition(-off.x, -off.y);
+
+    map.on({
+      move: this.onMove,
+      moveend: this.onMoveEnd,
+      zoomstart: this.onZoomStart,
+      zoomend: this.onZoomEnd,
+      resize: this.onResize,
+      viewreset: this.onViewReset,
+      click: this.onClick
+    }, this);
+
+    if (map.options.zoomAnimation) {
+      map.on('zoomanim', this.onZoom, this);
     }
-    Layers.appendTo(this.div);
-    setSize({width: map.size.w, height: map.size.h});
-    setZoom(map.zoom);
-    this.setOrigin();
 
-    let layerProjection = this.projection;
-    map.events.register('click', map, e => {
-      let id = Picking.getIdFromXY(e.xy.x, e.xy.y);
-      if (id) {
-        let geo = map.getLonLatFromPixel(e.xy).transform(layerProjection, this.projection);
-        onClick({feature: id, lat: geo.lat, lon: geo.lon});
-      }
-    });
+    if (map.attributionControl) {
+      map.attributionControl.addAttribution(ATTRIBUTION);
+    }
 
     Data.update();
   }
 
-  removeMap (map) {
-    Layers.remove();
-    super.removeMap.call(this, map);
-    this.map = null;
-  }
-
-  onMapResize () {
+  onRemove () {
     let map = this.map;
-    super.onMapResize.call(this);
-    onResize({width: map.size.w, height: map.size.h});
+    if (map.attributionControl) {
+      map.attributionControl.removeAttribution(ATTRIBUTION);
+    }
+
+    map.off({
+      move: this.onMove,
+      moveend: this.onMoveEnd,
+      zoomstart: this.onZoomStart,
+      zoomend: this.onZoomEnd,
+      resize: this.onResize,
+      viewreset: this.onViewReset,
+      click: this.onClick
+    }, this);
+
+    if (map.options.zoomAnimation) {
+      map.off('zoomanim', this.onZoom, this);
+    }
+    Layers.remove();
+    map = null;
   }
 
-  moveTo (bounds, zoomChanged, isDragging) {
+  onMove (e) {
+    let off = this.getOffset();
+    moveCam({x: this.offset.x - off.x, y: this.offset.y - off.y});
+  }
+
+  onMoveEnd (e) {
+    if (this.noMoveEnd) { // moveend is also fired after zoom
+      this.noMoveEnd = false;
+      return;
+    }
+
     let
       map = this.map,
-      res = super.moveTo.call(this, bounds, zoomChanged, isDragging);
+      off = this.getOffset(),
+      po = map.getPixelOrigin();
 
-    if (!isDragging) {
-      let
-        offsetLeft = parseInt(map.layerContainerDiv.style.left, 10),
-        offsetTop = parseInt(map.layerContainerDiv.style.top, 10);
+    this.offset = off;
+    Layers.setPosition(-off.x, -off.y);
+    moveCam({x: 0, y: 0});
 
-      this.div.style.left = -offsetLeft + 'px';
-      this.div.style.top = -offsetTop + 'px';
-    }
-
-    this.setOrigin();
-    this.offset.x = 0;
-    this.offset.y = 0;
-    moveCam(this.offset);
-
-    if (zoomChanged) {
-      onZoomEnd({zoom: map.zoom});
-    } else {
-      onMoveEnd();
-    }
-
-    return res;
+    setSize({width: map._size.x, height: map._size.y}); // in case this is triggered by resize
+    setOrigin({x: po.x - off.x, y: po.y - off.y});
+    onMoveEnd(e);
   }
 
-  moveByPx (dx, dy) {
-    this.offset.x += dx;
-    this.offset.y += dy;
-    let res = super.moveByPx.call(this, dx, dy);
-    moveCam(this.offset);
-    return res;
+  onZoomStart (e) {
+    onZoomStart(e);
+  }
+
+  onZoom (e) {
+    let center = this.map.latLngToContainerPoint(e.center);
+    let scale = Math.pow(2, e.zoom - ZOOM);
+
+    let dx = WIDTH / 2 - center.x;
+    let dy = HEIGHT / 2 - center.y;
+
+    let x = WIDTH / 2;
+    let y = HEIGHT / 2;
+
+    if (e.zoom > ZOOM) {
+      x -= dx * scale;
+      y -= dy * scale;
+    } else {
+      x += dx;
+      y += dy;
+    }
+
+    Layers.container.classList.add('zoom-animation');
+    Layers.container.style.transformOrigin = x + 'px ' + y + 'px';
+    Layers.container.style.transform = 'translate3d(0, 0, 0) scale(' + scale + ')';
+  }
+
+  onZoomEnd (e) {
+    Layers.clear();
+    Layers.container.classList.remove('zoom-animation');
+    Layers.container.style.transform = 'translate3d(0, 0, 0) scale(1)';
+
+    let
+      map = this.map,
+      off = this.getOffset(),
+      po = map.getPixelOrigin();
+
+    setOrigin({x: po.x - off.x, y: po.y - off.y});
+    onZoomEnd({zoom: map._zoom});
+    this.noMoveEnd = true;
+  }
+
+  onResize () {
+  }
+
+  onViewReset () {
+    let off = this.getOffset();
+
+    this.offset = off;
+    Layers.setPosition(-off.x, -off.y);
+    moveCam({x: 0, y: 0});
+  }
+
+  onClick (e) {
+    let id = Picking.getIdFromXY(e.containerPoint.x, e.containerPoint.y);
+    if (id) {
+      onClick({feature: id, lat: e.latlng.lat, lon: e.latlng.lng});
+    }
+  }
+
+  getOffset () {
+    return L.DomUtil.getPosition(this.map._mapPane);
+  }
+
+  //*** COMMON PUBLIC METHODS ***
+
+  style (style) {
+    style = style || {};
+    let color;
+    if ((color = style.color || style.wallColor)) {
+      WALL_COLOR = Qolor.parse(color);
+      WALL_COLOR_STR = '' + WALL_COLOR;
+
+      ALT_COLOR = WALL_COLOR.lightness(0.8);
+      ALT_COLOR_STR = '' + ALT_COLOR;
+
+      ROOF_COLOR = WALL_COLOR.lightness(1.2);
+      ROOF_COLOR_STR = '' + ROOF_COLOR;
+    }
+
+    if (style.roofColor) {
+      ROOF_COLOR = Qolor.parse(style.roofColor);
+      ROOF_COLOR_STR = '' + ROOF_COLOR;
+    }
+
+    Layers.render();
+
+    return this;
+  }
+
+  date (date) {
+    Shadows.date = date;
+    Shadows.render();
+    return this;
+  }
+
+  load (url) {
+    Data.load(url);
+    return this;
+  }
+
+  set (data) {
+    Data.set(data);
+    return this;
+  }
+
+  each (handler) {
+    onEach = function (payload) {
+      return handler(payload);
+    };
+    return this;
+  }
+
+  click (handler) {
+    onClick = function (payload) {
+      return handler(payload);
+    };
+    return this;
   }
 }
 
-OSMBuildings.name = 'OSM Buildings';
-OSMBuildings.attribution = ATTRIBUTION;
-OSMBuildings.isBaseLayer = false;
-OSMBuildings.alwaysInRange = true;
+OSMBuildings.VERSION = VERSION;
+OSMBuildings.ATTRIBUTION = ATTRIBUTION;
 
  return OSMBuildings;
 }());
